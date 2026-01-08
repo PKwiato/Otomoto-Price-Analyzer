@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.DS_Store
+.env
+venv/
+.gemini/
+history.csv
+new_generations.py
+update_car_data.py
+scrape_generations.py
+test_parse_generations.py
+check_source.py
+verify_*.py
