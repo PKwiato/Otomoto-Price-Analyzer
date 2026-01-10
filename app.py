@@ -159,6 +159,14 @@ if 'listings_df' in st.session_state:
     if selected_gearbox:
         search_term = map_gearbox_type(selected_gearbox)
         df = df[df['gearbox'].str.lower().str.contains(search_term, na=False)]
+        
+    # Filter by First Owner
+    if first_owner and 'first_owner' in df.columns:
+        df = df[df['first_owner'] == True]
+        
+    # Filter by Accident Free
+    if accident_free and 'accident_free' in df.columns:
+        df = df[df['accident_free'] == True]
 
     st.info(f"{st.session_state.get('scrape_info', '')}. Showing {len(df)} listings matching current filters.")
 

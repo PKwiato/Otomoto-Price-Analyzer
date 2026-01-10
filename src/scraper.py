@@ -187,6 +187,22 @@ def _parse_listing(article, scrape_date: str, year_from: int) -> Dict[str, Any]:
     # Drive type
     drive_elem = article.find('dd', {'data-parameter': 'drive'})
     drive = drive_elem.get_text(strip=True) if drive_elem else "N/A"
+
+    # Accident Free (Bezwypadkowy)
+    accident_free_val = False
+    # Check distinct parameters often used in list view
+    if article.find('li', class_='parameter-feature-item', string='Bezwypadkowy'):
+         accident_free_val = True
+    # Also check data-parameter if available (sometimes different in list view)
+    elif article.find('dd', {'data-parameter': 'no_accident'}):
+         accident_free_val = True
+
+    # First Owner (Pierwszy właściciel)
+    first_owner_val = False
+    if article.find('li', class_='parameter-feature-item', string='Pierwszy właściciel'):
+         first_owner_val = True
+    elif article.find('dd', {'data-parameter': 'original_owner'}):
+         first_owner_val = True
     
     return {
         "id": listing_id,
@@ -200,6 +216,8 @@ def _parse_listing(article, scrape_date: str, year_from: int) -> Dict[str, Any]:
         "fuel": fuel,
         "gearbox": gearbox,
         "drive": drive,
+        "accident_free": accident_free_val,
+        "first_owner": first_owner_val,
         "link": link
     }
 
