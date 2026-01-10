@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Otomoto Price Analyzer</title>
+
+    <!-- Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar">
+            <div class="logo">Otomoto Analyzer</div>
+
+            <div class="form-group">
+                <label>Manufacturer</label>
+                <select id="makeSelect"></select>
+            </div>
+
+            <div class="form-group">
+                <label>Model</label>
+                <select id="modelSelect"></select>
+            </div>
+
+            <div class="form-group">
+                <select id="genSelect" style="display:none"></select>
+            </div>
+
+            <div class="form-group">
+                <label>Production Year</label>
+                <div class="slider-container">
+                    <input type="number" id="yearFrom" value="2015" min="1990" max="2025">
+                    <span>-</span>
+                    <input type="number" id="yearTo" value="2024" min="1990" max="2025">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Fuel Type</label>
+                <select id="fuelSelect">
+                    <option value="">Any</option>
+                    <option value="petrol">Petrol</option>
+                    <option value="diesel">Diesel</option>
+                    <option value="electric">Electric</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="lpg">LPG</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Transmission</label>
+                <select id="gearboxSelect">
+                    <option value="">Any</option>
+                    <option value="manual">Manual</option>
+                    <option value="automatic">Automatic</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Drive Type</label>
+                <select id="driveSelect">
+                    <option value="">Any</option>
+                    <option value="front-wheel-drive">FWD</option>
+                    <option value="rear-wheel-drive">RWD</option>
+                    <option value="4x4">AWD / 4x4</option>
+                </select>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="checkbox-item">
+                    <input type="checkbox" id="firstOwner"> First Owner
+                </label>
+                <label class="checkbox-item">
+                    <input type="checkbox" id="accidentFree"> Accident Free
+                </label>
+            </div>
+
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Max Pages to Scrape</label>
+                <input type="number" id="maxPages" value="20" min="1" max="100">
+            </div>
+
+            <button id="analyzeBtn" class="analyze-btn">Analyze Prices</button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Key Metrics -->
+            <div class="stats-grid">
+                <div class="card">
+                    <div class="stat-title">Average Price</div>
+                    <div id="statAvg" class="stat-value">-</div>
+                </div>
+                <div class="card">
+                    <div class="stat-title">Median Price</div>
+                    <div id="statMedian" class="stat-value">-</div>
+                </div>
+                <div class="card">
+                    <div class="stat-title">Lowest Price</div>
+                    <div id="statMin" class="stat-value">-</div>
+                </div>
+                <div class="card">
+                    <div class="stat-title">Highest Price</div>
+                    <div id="statMax" class="stat-value">-</div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <canvas id="chartPriceDist"></canvas>
+                </div>
+                <div class="chart-card">
+                    <canvas id="chartPriceMile"></canvas>
+                </div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="data-table-container">
+                <div class="table-header">
+                    <h3>Raw Data</h3>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-sort="year" onclick="sortTable('year')">Year ⬍</th>
+                                <th data-sort="title" onclick="sortTable('title')">Title ⬍</th>
+                                <th data-sort="price" onclick="sortTable('price')">Price ⬍</th>
+                                <th data-sort="mileage" onclick="sortTable('mileage')">Mileage ⬍</th>
+                                <th>Fuel</th>
+                                <th>Gearbox</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Loader -->
+    <div id="loader" class="loader-overlay">
+        <div class="loader-content">
+            <div class="loader"></div>
+            <div id="loadingText" class="loading-text">Starting analysis...</div>
+        </div>
+    </div>
+
+    <!-- Frontend Script -->
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+
+</html>
