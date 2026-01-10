@@ -5,7 +5,7 @@ from datetime import datetime
 
 import time
 
-def get_listings(make, model, year_from, year_to, fuel_type=None, gearbox=None, drive_type=None, first_owner=False, generation_slug=None, max_pages=100, progress_callback=None):
+def get_listings(make, model, year_from, year_to, fuel_type=None, gearbox=None, drive_type=None, first_owner=False, accident_free=False, generation_slug=None, max_pages=100, progress_callback=None):
     """
     Scrapes OTOMOTO for car listings based on make, model, and year range.
     Returns a list of dictionaries with listing details.
@@ -35,6 +35,9 @@ def get_listings(make, model, year_from, year_to, fuel_type=None, gearbox=None, 
 
     if first_owner:
         params["search[filter_enum_original_owner]"] = "1"
+
+    if accident_free:
+        params["search[filter_enum_no_accident]"] = "1"
     
     headers = {
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"

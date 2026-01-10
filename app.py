@@ -79,8 +79,12 @@ with st.sidebar:
     drive_choice = st.selectbox("Drive Type", list(drive_options.keys()))
     selected_drive = drive_options[drive_choice]
     
-    # 8. First Owner Checkbox
-    first_owner = st.checkbox("First Owner Only")
+    # 8. Additional Checks
+    col_check1, col_check2 = st.columns(2)
+    with col_check1:
+        first_owner = st.checkbox("First Owner")
+    with col_check2:
+        accident_free = st.checkbox("Accident Free")
     
     st.markdown("---")
     st.info("ℹ️ The scraper will retrieve all available listings. This may take a while depending on the number of results.")
@@ -107,6 +111,7 @@ with tab1:
                                   gearbox=selected_gearbox,
                                   drive_type=selected_drive,
                                   first_owner=first_owner,
+                                  accident_free=accident_free,
                                   generation_slug=generation_slug,
                                   progress_callback=update_progress)
             
@@ -114,50 +119,73 @@ with tab1:
             status_text.empty()
             
             if listings:
-                # Save to history
+                df = pd.DataFrame(listings)
+                # Convert year to int for filtering
+                try:
+                    df['year'] = df['year'].astype(int)
+                except:
+                    pass
+                    
+                # Store in session state
+                st.session_state['listings_df'] = df
+                st.session_state['scrape_info'] = f"Scraped {len(listings)} listings for {make} {model}"
                 history_manager.save_to_history(listings)
                 st.success(f"Found {len(listings)} listings! Data saved to history.")
-                df = pd.DataFrame(listings)
-                
-                # Basic Statistics
-                avg_price = df['price'].mean()
-                median_price = df['price'].median()
-                min_price = df['price'].min()
-                max_price = df['price'].max()
-                
-                # metrics
-                col1, col2, col3, col4 = st.columns(4)
-                col1.metric("Average Price", f"{avg_price:,.0f} PLN")
-                col2.metric("Median Price", f"{median_price:,.0f} PLN")
-                col3.metric("Lowest Price", f"{min_price:,.0f} PLN")
-                col4.metric("Highest Price", f"{max_price:,.0f} PLN")
-                
-                st.markdown("---")
-
-                # Data Table
-                with st.expander("View Raw Data"):
-                    st.dataframe(df)
-                
-                # Visualization
-                # import plotly.express as px # Moved to top
-                
-                col_chart1, col_chart2 = st.columns(2)
-                
-                with col_chart1:
-                    st.subheader("Price Distribution")
-                    fig_hist = px.histogram(df, x="price", nbins=20, title="Price Histogram", labels={'price': 'Price (PLN)'})
-                    st.plotly_chart(fig_hist, use_container_width=True)
-                
-                with col_chart2:
-                    st.subheader("Price vs. Mileage")
-                    # Filter out valid mileage for plot
-                    df_plot = df[df['mileage'] > 0]
-                    fig_scatter = px.scatter(df_plot, x="mileage", y="price", hover_data=['title', 'year'], 
-                                             title="Price vs Mileage", labels={'mileage': 'Mileage (km)', 'price': 'Price (PLN)'})
-                    st.plotly_chart(fig_scatter, use_container_width=True)
-                
             else:
                 st.warning("No listings found or error in scraping. Please check your inputs or try again later.")
+
+    # DISPLAY LOGIC (Run if data exists in session state)
+    if 'listings_df' in st.session_state:
+        df = st.session_state['listings_df']
+        
+        # Apply Year Filter from Slider to the dataframe
+        # This allows dynamic filtering without re-scraping
+        if 'year' in df.columns:
+            df = df[(df['year'] >= year_from) & (df['year'] <= year_to)]
+            
+        st.info(f"{st.session_state.get('scrape_info', '')}. Showing {len(df)} listings in range {year_from}-{year_to}.")
+
+        if not df.empty:
+            # Basic Statistics
+            avg_price = df['price'].mean()
+            median_price = df['price'].median()
+            min_price = df['price'].min()
+            max_price = df['price'].max()
+            
+            # metrics
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Average Price", f"{avg_price:,.0f} PLN")
+            col2.metric("Median Price", f"{median_price:,.0f} PLN")
+            col3.metric("Lowest Price", f"{min_price:,.0f} PLN")
+            col4.metric("Highest Price", f"{max_price:,.0f} PLN")
+            
+            st.markdown("---")
+
+            # Data Table
+            with st.expander("View Raw Data"):
+                st.dataframe(df)
+            
+            col_chart1, col_chart2 = st.columns(2)
+            
+            with col_chart1:
+                st.subheader("Price Distribution")
+                fig_hist = px.histogram(df, x="price", nbins=20, title="Price Histogram", labels={'price': 'Price (PLN)'})
+                st.plotly_chart(fig_hist, use_container_width=True)
+            
+            with col_chart2:
+                st.subheader("Price vs. Mileage")
+                # Filter out valid mileage for plot
+                df_plot = df[df['mileage'] > 0]
+                fig_scatter = px.scatter(df_plot, x="mileage", y="price", hover_data=['title', 'year'], 
+                                         title="Price vs Mileage", labels={'mileage': 'Mileage (km)', 'price': 'Price (PLN)'})
+                st.plotly_chart(fig_scatter, use_container_width=True)
+            
+            st.subheader("Price vs. Year of Production")
+            fig_year = px.scatter(df, x="year", y="price", hover_data=['title', 'mileage'],
+                                  title="Price vs Year", labels={'year': 'Year', 'price': 'Price (PLN)'})
+            st.plotly_chart(fig_year, use_container_width=True)
+        else:
+            st.warning("No listings match the current filters.")
 
 
 
