@@ -104,6 +104,9 @@ def get_listings(make, model, year_from, year_to, fuel_type=None, gearbox=None, 
                     gearbox_elem = article.find('dd', {'data-parameter': 'gearbox'})
                     gearbox_val = gearbox_elem.get_text(strip=True) if gearbox_elem else "N/A"
 
+                    drive_elem = article.find('dd', {'data-parameter': 'drive'})
+                    drive_val = drive_elem.get_text(strip=True) if drive_elem else "N/A"
+
                     # Parse price to number if possible
                     try:
                         # Remove spaces and currency (PLN/EUR)
@@ -122,6 +125,7 @@ def get_listings(make, model, year_from, year_to, fuel_type=None, gearbox=None, 
                         "mileage": mileage_val,
                         "fuel": fuel,
                         "gearbox": gearbox_val,
+                        "drive": drive_val,
                         "link": link
                     })
                     

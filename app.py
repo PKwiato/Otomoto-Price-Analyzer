@@ -1,13 +1,14 @@
 import streamlit as st
 import pandas as pd
-from scraper import get_listings
+
+from src.scraper import get_listings
+from src import car_data
+from src.utils import map_fuel_type, map_gearbox_type
 
 st.set_page_config(page_title="Otomoto Price Analyzer", layout="wide")
 
 st.title("🚗 Otomoto Price Analyzer")
 st.markdown("Analyze car prices from Otomoto.pl based on Make, Model, and Year.")
-
-import car_data
 
 # Sidebar - Filter Options
 with st.sidebar:
@@ -87,135 +88,119 @@ with st.sidebar:
         accident_free = st.checkbox("Accident Free")
     
     st.markdown("---")
+    
+    # 9. Max Pages Control
+    max_pages = st.number_input(
+        "Max Pages to Scrape",
+        min_value=1,
+        max_value=500,
+        value=100,
+        step=1,
+        help="Limit the number of pages to scrape. Lower values = faster results."
+    )
+    
     st.info("ℹ️ The scraper will retrieve all available listings. This may take a while depending on the number of results.")
 
     analyze_btn = st.button("Analyze Prices")
 
-import history_manager
 import plotly.express as px
 
-# Main Content with Tabs
-tab1, tab2 = st.tabs(["Current Analysis", "Historical Trends"])
+# Main Content
+if analyze_btn:
+    # Create a status container for progress updates
+    status_text = st.empty()
+    
+    def update_progress(message):
+        status_text.text(f"⏳ {message}")
 
-with tab1:
-    if analyze_btn:
-        # Create a status container for progress updates
-        status_text = st.empty()
+    with st.spinner(f"Starting scrape for {make.upper()} {model} ({year_from}-{year_to})..."):
+        listings = get_listings(make, model, year_from, year_to, 
+                                fuel_type=selected_fuel,
+                                gearbox=selected_gearbox,
+                                drive_type=selected_drive,
+                                first_owner=first_owner,
+                                accident_free=accident_free,
+                                generation_slug=generation_slug,
+                                max_pages=max_pages,
+                                progress_callback=update_progress)
         
-        def update_progress(message):
-            status_text.text(f"⏳ {message}")
-
-        with st.spinner(f"Starting scrape for {make.upper()} {model} ({year_from}-{year_to})..."):
-            listings = get_listings(make, model, year_from, year_to, 
-                                  fuel_type=selected_fuel,
-                                  gearbox=selected_gearbox,
-                                  drive_type=selected_drive,
-                                  first_owner=first_owner,
-                                  accident_free=accident_free,
-                                  generation_slug=generation_slug,
-                                  progress_callback=update_progress)
-            
-            # Clear progress message when done
-            status_text.empty()
-            
-            if listings:
-                df = pd.DataFrame(listings)
-                # Convert year to int for filtering
-                try:
-                    df['year'] = df['year'].astype(int)
-                except:
-                    pass
-                    
-                # Store in session state
-                st.session_state['listings_df'] = df
-                st.session_state['scrape_info'] = f"Scraped {len(listings)} listings for {make} {model}"
-                history_manager.save_to_history(listings)
-                st.success(f"Found {len(listings)} listings! Data saved to history.")
-            else:
-                st.warning("No listings found or error in scraping. Please check your inputs or try again later.")
-
-    # DISPLAY LOGIC (Run if data exists in session state)
-    if 'listings_df' in st.session_state:
-        df = st.session_state['listings_df']
+        # Clear progress message when done
+        status_text.empty()
         
-        # Apply Year Filter from Slider to the dataframe
-        # This allows dynamic filtering without re-scraping
-        if 'year' in df.columns:
-            df = df[(df['year'] >= year_from) & (df['year'] <= year_to)]
-            
-        st.info(f"{st.session_state.get('scrape_info', '')}. Showing {len(df)} listings in range {year_from}-{year_to}.")
-
-        if not df.empty:
-            # Basic Statistics
-            avg_price = df['price'].mean()
-            median_price = df['price'].median()
-            min_price = df['price'].min()
-            max_price = df['price'].max()
-            
-            # metrics
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Average Price", f"{avg_price:,.0f} PLN")
-            col2.metric("Median Price", f"{median_price:,.0f} PLN")
-            col3.metric("Lowest Price", f"{min_price:,.0f} PLN")
-            col4.metric("Highest Price", f"{max_price:,.0f} PLN")
-            
-            st.markdown("---")
-
-            # Data Table
-            with st.expander("View Raw Data"):
-                st.dataframe(df)
-            
-            col_chart1, col_chart2 = st.columns(2)
-            
-            with col_chart1:
-                st.subheader("Price Distribution")
-                fig_hist = px.histogram(df, x="price", nbins=20, title="Price Histogram", labels={'price': 'Price (PLN)'})
-                st.plotly_chart(fig_hist, use_container_width=True)
-            
-            with col_chart2:
-                st.subheader("Price vs. Mileage")
-                # Filter out valid mileage for plot
-                df_plot = df[df['mileage'] > 0]
-                fig_scatter = px.scatter(df_plot, x="mileage", y="price", hover_data=['title', 'year'], 
-                                         title="Price vs Mileage", labels={'mileage': 'Mileage (km)', 'price': 'Price (PLN)'})
-                st.plotly_chart(fig_scatter, use_container_width=True)
-            
-            st.subheader("Price vs. Year of Production")
-            fig_year = px.scatter(df, x="year", y="price", hover_data=['title', 'mileage'],
-                                  title="Price vs Year", labels={'year': 'Year', 'price': 'Price (PLN)'})
-            st.plotly_chart(fig_year, use_container_width=True)
+        if listings:
+            df = pd.DataFrame(listings)
+            # Convert year to int for filtering
+            try:
+                df['year'] = df['year'].astype(int)
+            except:
+                pass
+                
+            # Store in session state
+            st.session_state['listings_df'] = df
+            st.session_state['scrape_info'] = f"Scraped {len(listings)} listings for {make} {model}"
+            st.success(f"Found {len(listings)} listings!")
         else:
-            st.warning("No listings match the current filters.")
+            st.warning("No listings found or error in scraping. Please check your inputs or try again later.")
 
-
-
-with tab2:
-    st.header("Historical Price Trends")
+# DISPLAY LOGIC (Run if data exists in session state)
+if 'listings_df' in st.session_state:
+    df = st.session_state['listings_df']
     
-    # Load history
-    history_df = history_manager.load_history()
+    # Apply Year Filter
+    if 'year' in df.columns:
+        df = df[(df['year'] >= year_from) & (df['year'] <= year_to)]
     
-    if not history_df.empty:
-        # Filter (optional, simplified for now to show all data relevant to current view or just text)
-        st.markdown(f"**Total Records in History:** {len(history_df)}")
+    # Filter by Fuel Type
+    if selected_fuel:
+        search_term = map_fuel_type(selected_fuel)
+        df = df[df['fuel'].str.lower().str.contains(search_term, na=False)]
         
-        # Ensure scrape_date is datetime
-        if "scrape_date" in history_df.columns:
-            history_df["scrape_date"] = pd.to_datetime(history_df["scrape_date"])
+    # Filter by Transmission
+    if selected_gearbox:
+        search_term = map_gearbox_type(selected_gearbox)
+        df = df[df['gearbox'].str.lower().str.contains(search_term, na=False)]
+
+    st.info(f"{st.session_state.get('scrape_info', '')}. Showing {len(df)} listings matching current filters.")
+
+    if not df.empty:
+        # Basic Statistics
+        avg_price = df['price'].mean()
+        median_price = df['price'].median()
+        min_price = df['price'].min()
+        max_price = df['price'].max()
         
-        # Show raw history
-        with st.expander("View Full History Log"):
-            st.dataframe(history_df.sort_values(by="scrape_date", ascending=False))
-            
-        # Group by date and calculate average price
-        if "scrape_date" in history_df.columns and "price" in history_df.columns:
-            daily_stats = history_df.groupby(history_df["scrape_date"].dt.date)["price"].mean().reset_index()
-            daily_stats.columns = ["Date", "Average Price"]
-            
-            st.subheader("Average Price Over Time")
-            fig_trend = px.line(daily_stats, x="Date", y="Average Price", markers=True, 
-                                title="Average Listing Price Trend")
-            st.plotly_chart(fig_trend, use_container_width=True)
+        # metrics
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Average Price", f"{avg_price:,.0f} PLN")
+        col2.metric("Median Price", f"{median_price:,.0f} PLN")
+        col3.metric("Lowest Price", f"{min_price:,.0f} PLN")
+        col4.metric("Highest Price", f"{max_price:,.0f} PLN")
+        
+        st.markdown("---")
+
+        # Data Table
+        with st.expander("View Raw Data"):
+            st.dataframe(df)
+        
+        col_chart1, col_chart2 = st.columns(2)
+        
+        with col_chart1:
+            st.subheader("Price Distribution")
+            fig_hist = px.histogram(df, x="price", nbins=20, title="Price Histogram", labels={'price': 'Price (PLN)'})
+            st.plotly_chart(fig_hist, use_container_width=True)
+        
+        with col_chart2:
+            st.subheader("Price vs. Mileage")
+            # Filter out valid mileage for plot
+            df_plot = df[df['mileage'] > 0]
+            fig_scatter = px.scatter(df_plot, x="mileage", y="price", hover_data=['title', 'year'], 
+                                     title="Price vs Mileage", labels={'mileage': 'Mileage (km)', 'price': 'Price (PLN)'})
+            st.plotly_chart(fig_scatter, use_container_width=True)
+        
+        st.subheader("Price vs. Year of Production")
+        fig_year = px.scatter(df, x="year", y="price", hover_data=['title', 'mileage'],
+                              title="Price vs Year", labels={'year': 'Year', 'price': 'Price (PLN)'})
+        st.plotly_chart(fig_year, use_container_width=True)
     else:
-        st.info("No historical data available yet. Run a search to save data.")
+        st.warning("No listings match the current filters.")
 
