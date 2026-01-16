@@ -22,7 +22,8 @@ def index():
 @app.route('/api/config')
 def get_config():
     """Return configuration data (makes) for the frontend."""
-    makes = sorted(list(car_data.models_dict.keys()))
+    from src.scraper import get_makes
+    makes = get_makes()
     return jsonify({
         'makes': makes
     })

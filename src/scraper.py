@@ -7,11 +7,16 @@ based on various search criteria.
 
 import json
 import time
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Callable
 
 import requests
 from bs4 import BeautifulSoup
+
+# Simple in-memory cache for metadata
+_metadata_cache = {}
+CACHE_TTL = timedelta(hours=1)
 
 
 def get_listings(
@@ -244,6 +249,12 @@ def _parse_mileage(mileage_text: str) -> int:
         return 0
 
 
+def get_makes() -> List[Dict[str, str]]:
+    """Fetch all available car makes from Otomoto."""
+    url = "https://www.otomoto.pl/osobowe"
+    return _extract_filter_data(url, 'filter_enum_make')
+
+
 def get_models(make: str) -> List[Dict[str, str]]:
     """Fetch models for a given make from Otomoto."""
     url = f"https://www.otomoto.pl/osobowe/{make}"
@@ -257,7 +268,14 @@ def get_generations(make: str, model: str) -> List[Dict[str, str]]:
 
 
 def _extract_filter_data(url: str, filter_id: str) -> List[Dict[str, str]]:
-    """Helper to extract filter data from NEXT_DATA in a page."""
+    """Helper to extract filter data from NEXT_DATA in a page with caching."""
+    # Check cache
+    cache_key = f"{url}:{filter_id}"
+    if cache_key in _metadata_cache:
+        timestamp, data = _metadata_cache[cache_key]
+        if datetime.now() - timestamp < CACHE_TTL:
+            return data
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                      "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -274,7 +292,7 @@ def _extract_filter_data(url: str, filter_id: str) -> List[Dict[str, str]]:
         data = json.loads(script_tag.string)
         urql_state = data.get('props', {}).get('pageProps', {}).get('urqlState', {})
         
-        # Parse conditions from URL
+        # Parse conditions for better matching if model-specific
         url_parts = url.split('/')
         make = url_parts[4] if len(url_parts) > 4 else None
         model = url_parts[5] if len(url_parts) > 5 else None
@@ -293,16 +311,24 @@ def _extract_filter_data(url: str, filter_id: str) -> List[Dict[str, str]]:
                             
                         vals = _extract_values_from_filter(f)
                         for val in vals:
+                            # Keep most generic or most complete name
                             all_values[val['id']] = val['name']
                 except:
                     continue
         
+        res = []
         if all_values:
-            return [{'id': k, 'name': v} for k, v in sorted(all_values.items(), key=lambda x: x[1])]
+            res = [{'id': k, 'name': v} for k, v in sorted(all_values.items(), key=lambda x: x[1])]
         
         # If not found in urqlState, try AlternativeLinks as fallback for models
-        if filter_id == 'filter_enum_model' and make:
-            return _extract_from_alternative_links(data, make_slug=make)
+        if not res and filter_id == 'filter_enum_model' and make:
+            res = _extract_from_alternative_links(data, make_slug=make)
+
+        # Cache results if successful
+        if res:
+            _metadata_cache[cache_key] = (datetime.now(), res)
+            
+        return res
 
     except Exception as e:
         print(f"Error extracting filter {filter_id} from {url}: {e}")
@@ -342,7 +368,7 @@ def _find_filters_recursive(obj: Any, target_id: str) -> List[Dict[str, Any]]:
 
 
 def _extract_values_from_filter(filter_obj: Dict[str, Any]) -> List[Dict[str, str]]:
-    """Extract label/value pairs from a filter object."""
+    """Extract label/value pairs from a filter object, including counter if present."""
     values = []
     raw_values = filter_obj.get('values', [])
     for val in raw_values:
@@ -350,16 +376,24 @@ def _extract_values_from_filter(filter_obj: Dict[str, Any]) -> List[Dict[str, st
             continue
             
         if val.get('__typename') == 'AdvertSearchFilterValue':
+            name = val.get('name')
+            counter = val.get('counter')
+            if counter is not None:
+                name = f"{name} ({counter})"
             values.append({
                 'id': val.get('id'),
-                'name': val.get('name')
+                'name': name
             })
         elif val.get('__typename') == 'AdvertSearchFilterValuesGroup':
             for gv in val.get('values', []):
                 if isinstance(gv, dict):
+                    name = gv.get('name')
+                    counter = gv.get('counter')
+                    if counter is not None:
+                        name = f"{name} ({counter})"
                     values.append({
                         'id': gv.get('id'),
-                        'name': gv.get('name')
+                        'name': name
                     })
     return values
 

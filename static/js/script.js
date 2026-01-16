@@ -30,9 +30,9 @@ function populateMakeSelect() {
 
     configData.makes.forEach(make => {
         const option = document.createElement('option');
-        option.value = make;
-        option.textContent = make.toUpperCase();
-        if (make === 'bmw') option.selected = true; // Default
+        option.value = make.id;
+        option.textContent = make.name;
+        if (make.id === 'bmw') option.selected = true; // Default
         makeSelect.appendChild(option);
     });
 }
@@ -75,15 +75,17 @@ async function updateGenerationSelect() {
     const model = document.getElementById('modelSelect').value;
     const genSelect = document.getElementById('genSelect');
 
+    const genGroup = document.getElementById('genGroup');
+
     if (!model) {
-        genSelect.parentElement.style.display = 'none';
+        genGroup.style.display = 'none';
         return;
     }
 
     // Show loading
     genSelect.innerHTML = '<option value="">Loading generations...</option>';
     genSelect.disabled = true;
-    genSelect.parentElement.style.display = 'block';
+    genGroup.style.display = 'block';
 
     try {
         const response = await fetch(`/api/generations/${make}/${model}`);
@@ -98,13 +100,13 @@ async function updateGenerationSelect() {
                 genSelect.appendChild(option);
             });
             genSelect.disabled = false;
-            genSelect.parentElement.style.display = 'block';
+            genGroup.style.display = 'block';
         } else {
-            genSelect.parentElement.style.display = 'none';
+            genGroup.style.display = 'none';
         }
     } catch (error) {
         console.error('Failed to fetch generations:', error);
-        genSelect.parentElement.style.display = 'none';
+        genGroup.style.display = 'none';
     }
 }
 
