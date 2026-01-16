@@ -194,6 +194,21 @@ def _parse_listing(article, scrape_date: str, year_from: int) -> Dict[str, Any]:
     drive_elem = article.find('dd', {'data-parameter': 'drive'})
     drive = drive_elem.get_text(strip=True) if drive_elem else "N/A"
 
+    # Region Extraction
+    region = "N/A"
+    try:
+        # The location is typically in the footer of the article in format "City (Region)"
+        # We look for a paragraph or span that matches this pattern
+        location_candidates = article.find_all(['p', 'span'])
+        for cand in location_candidates:
+            text = cand.get_text(strip=True)
+            match = re.search(r'\(([^)]+)\)', text)
+            if match and len(text) < 60: # Limit length to avoid catching long descriptions
+                region = match.group(1)
+                break
+    except Exception:
+        pass
+
     # Accident Free (Bezwypadkowy)
     accident_free_val = False
     # Check distinct parameters often used in list view
@@ -222,6 +237,7 @@ def _parse_listing(article, scrape_date: str, year_from: int) -> Dict[str, Any]:
         "fuel": fuel,
         "gearbox": gearbox,
         "drive": drive,
+        "region": region,
         "accident_free": accident_free_val,
         "first_owner": first_owner_val,
         "link": link

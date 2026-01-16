@@ -3,12 +3,24 @@
 let configData = null;
 let charts = {};
 let scrapedListings = [];
+let polandRegions = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     await loadConfig();
+    await loadMapData();
     setupEventListeners();
 });
+
+async function loadMapData() {
+    try {
+        const response = await fetch('https://raw.githubusercontent.com/ppatrzyk/polska-geojson/master/wojewodztwa/wojewodztwa-min.geojson');
+        const geoData = await response.json();
+        polandRegions = geoData.features;
+    } catch (error) {
+        console.error('Failed to load map data:', error);
+    }
+}
 
 // Load configuration (makes)
 async function loadConfig() {
@@ -331,7 +343,118 @@ function updateUI(data) {
     document.getElementById('statMax').textContent = Math.round(max).toLocaleString() + ' PLN';
 
     updateCharts(data);
+    updateRegionMap(data);
     updateTable(data);
+}
+
+function updateRegionMap(data) {
+    if (!polandRegions) return;
+
+    const ctx = document.getElementById('chartRegionMap').getContext('2d');
+
+    // Group analysis by region
+    const regionStats = {};
+
+    data.forEach(item => {
+        if (!item.region || item.region === 'N/A') return;
+
+        const regionName = item.region.toLowerCase().trim();
+        if (!regionStats[regionName]) {
+            regionStats[regionName] = { count: 0, totalPrice: 0, prices: [] };
+        }
+        regionStats[regionName].count++;
+        regionStats[regionName].totalPrice += item.price;
+        regionStats[regionName].prices.push(item.price);
+    });
+
+    const regionsList = Object.keys(regionStats);
+    if (regionsList.length === 0) return;
+
+    // Map stats to GeoJSON features
+    const chartData = polandRegions.map(feature => {
+        const geoName = feature.properties.nazwa.toLowerCase().trim();
+        const stat = regionStats[geoName] || { count: 0, totalPrice: 0 };
+        return {
+            feature: feature,
+            value: stat.count > 0 ? (stat.totalPrice / stat.count) : 0,
+            count: stat.count
+        };
+    });
+
+    if (charts.map) charts.map.destroy();
+
+    // Heatmap color scale (Green to Red)
+    // We'll use Chart.js built-in scales or custom Interpolation
+    const values = chartData.map(d => d.value).filter(v => v > 0);
+    const minVal = Math.min(...values) || 0;
+    const maxVal = Math.max(...values) || 1;
+
+    charts.map = new Chart(ctx, {
+        type: 'choropleth',
+        data: {
+            labels: chartData.map((d) => d.feature.properties.nazwa),
+            datasets: [{
+                label: 'Average Price',
+                outline: polandRegions,
+                data: chartData.map((d) => ({
+                    feature: d.feature,
+                    value: d.value,
+                    count: d.count
+                }))
+            }]
+        },
+        options: {
+            showOutline: true,
+            showGraticule: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (context) => {
+                            const d = context.raw;
+                            return `${context.label}: ${Math.round(d.value).toLocaleString()} PLN (${d.count} cars)`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                projection: {
+                    axis: 'x',
+                    projection: 'mercator'
+                },
+                color: {
+                    axis: 'x',
+                    interpolate: (v) => {
+                        if (v <= 0) return '#1e293b'; // Empty color
+                        // Map v to green -> yellow -> red
+                        // 0.0 -> rgb(34, 197, 94) [Green 500]
+                        // 0.5 -> rgb(234, 179, 8) [Yellow 500]
+                        // 1.0 -> rgb(239, 68, 68) [Red 500]
+
+                        let r, g, b;
+                        if (v < 0.5) {
+                            // Green to Yellow
+                            const t = v * 2;
+                            r = Math.round(34 + t * (234 - 34));
+                            g = Math.round(197 + t * (179 - 197));
+                            b = Math.round(94 + t * (8 - 94));
+                        } else {
+                            // Yellow to Red
+                            const t = (v - 0.5) * 2;
+                            r = Math.round(234 + t * (239 - 234));
+                            g = Math.round(179 + t * (68 - 179));
+                            b = Math.round(8 + t * (68 - 8));
+                        }
+                        return `rgb(${r},${g},${b})`;
+                    }
+                }
+            },
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
 }
 
 function updateCharts(data) {

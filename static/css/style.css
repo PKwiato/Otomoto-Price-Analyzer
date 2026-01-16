@@ -50,6 +50,7 @@ body {
     font-weight: 800;
     margin-bottom: 2rem;
     background: var(--accent-gradient);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     display: inline-block;
@@ -187,6 +188,23 @@ input:focus {
     border-radius: 1rem;
     padding: 1.5rem;
     height: 400px;
+    display: flex;
+    flex-direction: column;
+}
+
+.chart-header {
+    margin-bottom: 1rem;
+}
+
+.chart-header h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.chart-header p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
 }
 
 .chart-card.full-width {

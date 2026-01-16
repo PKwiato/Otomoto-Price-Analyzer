@@ -8,6 +8,8 @@
 
     <!-- Dependencies -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/topojson-client"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-geo"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- Custom CSS -->
@@ -121,6 +123,15 @@
                 </div>
                 <div class="chart-card">
                     <canvas id="chartPriceMile"></canvas>
+                </div>
+                <div class="chart-card full-width">
+                    <div class="chart-header">
+                        <h3>Regional Price Heatmap (Poland)</h3>
+                        <p id="mapLegend">Average price per region</p>
+                    </div>
+                    <div style="height: 500px; position: relative;">
+                        <canvas id="chartRegionMap"></canvas>
+                    </div>
                 </div>
             </div>
 
