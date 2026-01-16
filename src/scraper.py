@@ -5,6 +5,7 @@ This module provides functionality to scrape car listings from Otomoto.pl
 based on various search criteria.
 """
 
+import json
 import time
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Callable
@@ -241,3 +242,171 @@ def _parse_mileage(mileage_text: str) -> int:
         return int(mileage_text.replace(' ', '').replace('km', '').strip())
     except ValueError:
         return 0
+
+
+def get_models(make: str) -> List[Dict[str, str]]:
+    """Fetch models for a given make from Otomoto."""
+    url = f"https://www.otomoto.pl/osobowe/{make}"
+    return _extract_filter_data(url, 'filter_enum_model')
+
+
+def get_generations(make: str, model: str) -> List[Dict[str, str]]:
+    """Fetch generations for a given make and model from Otomoto."""
+    url = f"https://www.otomoto.pl/osobowe/{make}/{model}"
+    return _extract_filter_data(url, 'filter_enum_generation')
+
+
+def _extract_filter_data(url: str, filter_id: str) -> List[Dict[str, str]]:
+    """Helper to extract filter data from NEXT_DATA in a page."""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                     "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+        script_tag = soup.find('script', id='__NEXT_DATA__')
+        if not script_tag:
+            return []
+        
+        data = json.loads(script_tag.string)
+        urql_state = data.get('props', {}).get('pageProps', {}).get('urqlState', {})
+        
+        # Parse conditions from URL
+        url_parts = url.split('/')
+        make = url_parts[4] if len(url_parts) > 4 else None
+        model = url_parts[5] if len(url_parts) > 5 else None
+        
+        all_values = {}
+        
+        for v in urql_state.values():
+            if isinstance(v, dict) and 'data' in v:
+                try:
+                    inner_data = json.loads(v['data'])
+                    found_filters = _find_filters_recursive(inner_data, filter_id)
+                    for f in found_filters:
+                        # Check conditions if present
+                        if not _matches_conditions(f, make, model):
+                            continue
+                            
+                        vals = _extract_values_from_filter(f)
+                        for val in vals:
+                            all_values[val['id']] = val['name']
+                except:
+                    continue
+        
+        if all_values:
+            return [{'id': k, 'name': v} for k, v in sorted(all_values.items(), key=lambda x: x[1])]
+        
+        # If not found in urqlState, try AlternativeLinks as fallback for models
+        if filter_id == 'filter_enum_model' and make:
+            return _extract_from_alternative_links(data, make_slug=make)
+
+    except Exception as e:
+        print(f"Error extracting filter {filter_id} from {url}: {e}")
+    
+    return []
+
+
+def _matches_conditions(filter_obj: Dict[str, Any], make: Optional[str], model: Optional[str]) -> bool:
+    """Check if the filter object matches the given make and model conditions."""
+    conditions = filter_obj.get('conditions', [])
+    if not conditions:
+        return True # Assume it's a global filter or correctly scoped if no conditions
+        
+    for cond in conditions:
+        f_id = cond.get('filterId')
+        val = cond.get('value')
+        if f_id == 'filter_enum_make' and make and val != make:
+            return False
+        if f_id == 'filter_enum_model' and model and val != model:
+            return False
+    return True
+
+
+def _find_filters_recursive(obj: Any, target_id: str) -> List[Dict[str, Any]]:
+    """Recursively find all filter objects with a specific ID or filterId."""
+    results = []
+    if isinstance(obj, dict):
+        # We look for AdvertSearchFilter (id) or OpenForInputFilterState (filterId)
+        if obj.get('id') == target_id or obj.get('filterId') == target_id:
+            results.append(obj)
+        for v in obj.values():
+            results.extend(_find_filters_recursive(v, target_id))
+    elif isinstance(obj, list):
+        for item in obj:
+            results.extend(_find_filters_recursive(item, target_id))
+    return results
+
+
+def _extract_values_from_filter(filter_obj: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Extract label/value pairs from a filter object."""
+    values = []
+    raw_values = filter_obj.get('values', [])
+    for val in raw_values:
+        if not isinstance(val, dict):
+            continue
+            
+        if val.get('__typename') == 'AdvertSearchFilterValue':
+            values.append({
+                'id': val.get('id'),
+                'name': val.get('name')
+            })
+        elif val.get('__typename') == 'AdvertSearchFilterValuesGroup':
+            for gv in val.get('values', []):
+                if isinstance(gv, dict):
+                    values.append({
+                        'id': gv.get('id'),
+                        'name': gv.get('name')
+                    })
+    return values
+
+
+def _extract_from_alternative_links(next_data: Dict[str, Any], make_slug: str) -> List[Dict[str, str]]:
+    """Fallback extraction from AlternativeLinksBlock (often models) if urqlState fails."""
+    import re
+    try:
+        # Search for AlternativeLinksBlock in props
+        def find_alt_links(obj):
+            if isinstance(obj, dict):
+                if obj.get('__typename') == 'AlternativeLinksBlock' and (obj.get('name') == 'model-generations' or obj.get('name') == 'models'):
+                    return obj
+                for v in obj.values():
+                    res = find_alt_links(v)
+                    if res: return res
+            elif isinstance(obj, list):
+                for item in obj:
+                    res = find_alt_links(item)
+                    if res: return res
+            return None
+
+        alt_block = find_alt_links(next_data)
+        if not alt_block:
+            return []
+            
+        models = []
+        # Pattern to extract model slug from URL: /osobowe/make/model-slug
+        pattern = re.compile(rf"/osobowe/{make_slug}/([^/?#\s]+)")
+        
+        for link in alt_block.get('links', []):
+            url = link.get('url', '')
+            match = pattern.search(url)
+            if match:
+                model_slug = match.group(1)
+                # Filter out regions or other things
+                if any(region in model_slug for region in ['mazowieckie', 'slaskie', 'wielkopolskie']):
+                    continue
+                
+                name = link.get('title', model_slug)
+                # Cleanup name
+                clean_name = name.replace(make_slug.capitalize(), '').strip()
+                
+                models.append({
+                    'id': model_slug,
+                    'name': clean_name if clean_name else model_slug
+                })
+        return models
+    except:
+        return []

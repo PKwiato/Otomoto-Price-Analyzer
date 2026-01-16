@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
 });
 
-// Load configuration (makes, models, etc.)
+// Load configuration (makes)
 async function loadConfig() {
     try {
         const response = await fetch('/api/config');
@@ -18,7 +18,7 @@ async function loadConfig() {
 
         populateMakeSelect();
         // Trigger model population for default make
-        updateModelSelect();
+        await updateModelSelect();
     } catch (error) {
         console.error('Failed to load config:', error);
     }
@@ -37,41 +37,73 @@ function populateMakeSelect() {
     });
 }
 
-function updateModelSelect() {
+async function updateModelSelect() {
     const make = document.getElementById('makeSelect').value;
     const modelSelect = document.getElementById('modelSelect');
-    modelSelect.innerHTML = '';
 
-    if (configData.models[make]) {
-        configData.models[make].forEach(model => {
+    // Show loading state
+    modelSelect.innerHTML = '<option>Loading models...</option>';
+    modelSelect.disabled = true;
+
+    try {
+        const response = await fetch(`/api/models/${make}`);
+        const models = await response.json();
+
+        modelSelect.innerHTML = '';
+        models.forEach(model => {
             const option = document.createElement('option');
-            option.value = model;
-            option.textContent = model;
-            if (model === 'seria-3') option.selected = true;
+            option.value = model.id;
+            option.textContent = model.name;
             modelSelect.appendChild(option);
         });
-    }
 
-    updateGenerationSelect();
+        // Select a default if it exists (e.g. seria-3 for bmw)
+        if (make === 'bmw' && models.some(m => m.id === 'seria-3')) {
+            modelSelect.value = 'seria-3';
+        }
+
+        modelSelect.disabled = false;
+        await updateGenerationSelect();
+    } catch (error) {
+        console.error('Failed to fetch models:', error);
+        modelSelect.innerHTML = '<option value="">Error loading models</option>';
+    }
 }
 
-function updateGenerationSelect() {
+async function updateGenerationSelect() {
     const make = document.getElementById('makeSelect').value;
     const model = document.getElementById('modelSelect').value;
     const genSelect = document.getElementById('genSelect');
 
-    genSelect.innerHTML = '<option value="">All Generations</option>';
+    if (!model) {
+        genSelect.parentElement.style.display = 'none';
+        return;
+    }
 
-    if (configData.generations[make] && configData.generations[make][model]) {
-        const gens = configData.generations[make][model];
-        Object.keys(gens).forEach(genName => {
-            const option = document.createElement('option');
-            option.textContent = genName;
-            option.value = gens[genName];
-            genSelect.appendChild(option);
-        });
-        genSelect.parentElement.style.display = 'block';
-    } else {
+    // Show loading
+    genSelect.innerHTML = '<option value="">Loading generations...</option>';
+    genSelect.disabled = true;
+    genSelect.parentElement.style.display = 'block';
+
+    try {
+        const response = await fetch(`/api/generations/${make}/${model}`);
+        const gens = await response.json();
+
+        genSelect.innerHTML = '<option value="">All Generations</option>';
+        if (gens && gens.length > 0) {
+            gens.forEach(gen => {
+                const option = document.createElement('option');
+                option.textContent = gen.name;
+                option.value = gen.id;
+                genSelect.appendChild(option);
+            });
+            genSelect.disabled = false;
+            genSelect.parentElement.style.display = 'block';
+        } else {
+            genSelect.parentElement.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Failed to fetch generations:', error);
         genSelect.parentElement.style.display = 'none';
     }
 }

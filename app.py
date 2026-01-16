@@ -21,16 +21,25 @@ def index():
 
 @app.route('/api/config')
 def get_config():
-    """Return configuration data (makes, models, etc.) for the frontend."""
-    # Convert car_data structures to JSON-friendly format
+    """Return configuration data (makes) for the frontend."""
     makes = sorted(list(car_data.models_dict.keys()))
-    
-    # We'll send the whole structure so frontend can handle dependencies
     return jsonify({
-        'makes': makes,
-        'models': car_data.models_dict,
-        'generations': car_data.generations_dict
+        'makes': makes
     })
+
+@app.route('/api/models/<make>')
+def get_models_for_make(make):
+    """Fetch models for a specific make dynamically."""
+    from src.scraper import get_models
+    models = get_models(make)
+    return jsonify(models)
+
+@app.route('/api/generations/<make>/<model>')
+def get_generations_for_model(make, model):
+    """Fetch generations for a specific model dynamically."""
+    from src.scraper import get_generations
+    generations = get_generations(make, model)
+    return jsonify(generations)
 
 @app.route('/api/analyze', methods=['POST'])
 def analyze():
